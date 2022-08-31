@@ -470,7 +470,7 @@ function set-rsgRightSize{
         [Int]$maintenanceWindowLengthInHours, #length of maintenance window in hours (round up if needed)
         [ValidateSet(0,1,2,3,4,5,6)][Int]$maintenanceWindowDay, #day on which the maintenance window starts (UTC) where 0 = Sunday and 6 = Saturday
         [String]$region = "westeurope", #you can find yours using Get-AzLocation | select Location
-        [Int]$measurePeriodHours = 152, #lookback period for a VM's performance while it was online, this is used to calculate the optimum. It is not recommended to size multiple times in this period!
+        [Int]$measurePeriodHours = 168, #lookback period for a VM's performance while it was online, this is used to calculate the optimum. It is not recommended to size multiple times in this period!
         [Switch]$Force, #shuts a VM down to resize it if it detects the VM is still running when you run this command
         [Switch]$Boot, #after resizing, by default a VM stays offline. Use -Boot to automatically start if after resizing
         [Switch]$WhatIf, #best used together with -Verbose. Causes the script not to modify anything, just to log what it would do
