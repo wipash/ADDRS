@@ -237,6 +237,10 @@ function get-vmRightSize{
 
         $targetVMPricing = $Null
         $targetVMPricing = $azureVMPrices | where{$_.name -eq $targetVM.HardwareProfile.VmSize}
+        # Try the non-'s' version of the VM if pricing for the 's' version is not available, as they're often the same price
+        if ($null -eq $targetVMPricing){
+            $targetVMPricing = $azureVMPrices | where{$_.name -eq ($targetVM.HardwareProfile.VmSize -creplace 's', '')}
+        }
 
         $targetVMCurrentHardware = $global:azureAvailableVMSizes | where{$_.Name -eq $targetVM.HardwareProfile.VmSize}
         if(!$targetVMCurrentHardware){
