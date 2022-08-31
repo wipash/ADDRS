@@ -130,7 +130,6 @@ function get-vmRightSize {
     Param(
         [Parameter(Mandatory)][String]$targetVMName,
         [Parameter(Mandatory)][Guid]$workspaceId, #workspace GUID where perf data is stored (use Get-AzOperationalInsightsWorkspace to find this)
-        $domain, #if your machines are domain joined, enter the domain name here
         [Int]$maintenanceWindowStartHour, #start hour of maintenancewindow in military time UTC (0-23)
         [Int]$maintenanceWindowLengthInHours, #length of maintenance window in hours (round up if needed)
         [ValidateSet(0, 1, 2, 3, 4, 5, 6)][Int]$maintenanceWindowDay, #day on which the maintenance window starts (UTC) where 0 = Sunday and 6 = Saturday
@@ -188,9 +187,7 @@ function get-vmRightSize {
     $mll = $memoryTrigger - $rightSizingMinimumDifferencePercent
 
     #determine Azure Monitor query parameters in case a maintenance window was specified
-    if ($domain) {
-        $domain = ".$($domain)"
-    }
+
     if ($maintenanceWindowStartHour -and $maintenanceWindowDay -and $maintenanceWindowLengthInHours) {
         $start = ([datetime]"2022-02-01T$($maintenanceWindowStartHour):00:00")
         $end = $start.AddHours($maintenanceWindowLengthInHours)
@@ -293,14 +290,14 @@ function get-vmRightSize {
 
     #get memory performance of targeted VM in configured period
     try {
-        $query = "Perf | where TimeGenerated between (ago($($measurePeriodHours)h) .. ago(0h)) and CounterName startswith 'Available Mbytes' and Computer startswith '$($targetVMName)$($domain)'$queryAddition | project TimeGenerated, CounterValue | order by CounterValue"
+        $query = "Perf | where TimeGenerated between (ago($($measurePeriodHours)h) .. ago(0h)) and CounterName startswith 'Available Mbytes' and Computer startswith '$($targetVMName)'$queryAddition | project TimeGenerated, CounterValue | order by CounterValue"
         Write-Verbose "$targetVMName querying log analytics: $query"
         $result = Invoke-AzOperationalInsightsQuery -WorkspaceId $workspaceId -Query $query -ErrorAction Stop
         $resultsArray = [System.Linq.Enumerable]::ToArray($result.Results)
         Write-Verbose "$targetVMName retrieved $($resultsArray.Count) MB (LA type counter) memory datapoints from Azure Monitor"
         if ($resultsArray.Count -le 0) {
             Write-Verbose 'No data returned by Log Analytics for LA type counter, checking for AM type counter'
-            $query = "Perf | where TimeGenerated between (ago($($measurePeriodHours)h) .. ago(0h)) and CounterName startswith 'Available Bytes' and Computer startswith '$($targetVMName)$($domain)'$queryAddition | project TimeGenerated, CounterValue | order by CounterValue"
+            $query = "Perf | where TimeGenerated between (ago($($measurePeriodHours)h) .. ago(0h)) and CounterName startswith 'Available Bytes' and Computer startswith '$($targetVMName)'$queryAddition | project TimeGenerated, CounterValue | order by CounterValue"
             Write-Verbose "$targetVMName querying azure monitor: $query"
             $result = Invoke-AzOperationalInsightsQuery -WorkspaceId $workspaceId -Query $query -ErrorAction Stop
             $resultsArray = [System.Linq.Enumerable]::ToArray($result.Results)
@@ -336,7 +333,7 @@ function get-vmRightSize {
 
     #get cpu performance of targeted VM in configured period
     try {
-        $query = "Perf | where TimeGenerated between (ago($($measurePeriodHours)h) .. ago(0h)) and CounterName =~ '% Processor Time' and Computer startswith '$($targetVMName)$($domain)'$queryAddition | project TimeGenerated, CounterValue | order by CounterValue"
+        $query = "Perf | where TimeGenerated between (ago($($measurePeriodHours)h) .. ago(0h)) and CounterName =~ '% Processor Time' and Computer startswith '$($targetVMName)'$queryAddition | project TimeGenerated, CounterValue | order by CounterValue"
         Write-Verbose "$targetVMName querying azure monitor: $query"
         $result = Invoke-AzOperationalInsightsQuery -WorkspaceId $workspaceId -Query $query -ErrorAction Stop
         $resultsArray = [System.Linq.Enumerable]::ToArray($result.Results)
@@ -489,7 +486,7 @@ function set-rsgRightSize {
     Use -Report to output a full report in csv format
 
     .EXAMPLE
-    set-rsgRightSize -targetRSG rg-avd-we-01 -domain company.local -workspaceId e32b3dbe-2850-4f88-9acb-2b919cce4126 -Force
+    set-rsgRightSize -targetRSG rg-avd-we-01 -workspaceId e32b3dbe-2850-4f88-9acb-2b919cce4126 -Force
     set-rsgRightSize -targetRSG rg-avd-we-01 -workspaceId e32b3dbe-2850-4f88-9acb-2b919cce4126 -WhatIf
 
     #>
@@ -497,7 +494,6 @@ function set-rsgRightSize {
     Param(
         [Parameter(Mandatory)][String]$targetRSG,
         [Parameter(Mandatory)][Guid]$workspaceId, #workspace GUID where perf data is stored (use Get-AzOperationalInsightsWorkspace to find this)
-        $domain, #if your machines are domain joined, enter the domain name here
         [Int]$maintenanceWindowStartHour, #start hour of maintenancewindow in military time UTC (0-23)
         [Int]$maintenanceWindowLengthInHours, #length of maintenance window in hours (round up if needed)
         [ValidateSet(0, 1, 2, 3, 4, 5, 6)][Int]$maintenanceWindowDay, #day on which the maintenance window starts (UTC) where 0 = Sunday and 6 = Saturday
@@ -514,7 +510,7 @@ function set-rsgRightSize {
     $reportRows = @()
     foreach ($vm in $targetVMs) {
         Write-Verbose "calling set-vmRightSize for $($vm.Name)"
-        $retVal = set-vmRightSize -targetVMName $vm.Name -domain $domain -workspaceId $workspaceId -maintenanceWindowStartHour $maintenanceWindowStartHour -maintenanceWindowLengthInHours $maintenanceWindowLengthInHours -maintenanceWindowDay $maintenanceWindowDay -region $region -measurePeriodHours $measurePeriodHours -Report:$Report.IsPresent -Force:$Force.IsPresent -Boot:$Boot.IsPresent -WhatIf:$WhatIf.IsPresent
+        $retVal = set-vmRightSize -targetVMName $vm.Name -workspaceId $workspaceId -maintenanceWindowStartHour $maintenanceWindowStartHour -maintenanceWindowLengthInHours $maintenanceWindowLengthInHours -maintenanceWindowDay $maintenanceWindowDay -region $region -measurePeriodHours $measurePeriodHours -Report:$Report.IsPresent -Force:$Force.IsPresent -Boot:$Boot.IsPresent -WhatIf:$WhatIf.IsPresent
         if ($Report) {
             $reportRows += $retVal
         }
@@ -542,7 +538,7 @@ function set-vmRightSize {
     Use -Report to output a report object
 
     .EXAMPLE
-    set-vmRightSize -targetVMName azvm01 -domain company.local -workspaceId e32b3dbe-2850-4f88-9acb-2b919cce4126 -Force
+    set-vmRightSize -targetVMName azvm01 -workspaceId e32b3dbe-2850-4f88-9acb-2b919cce4126 -Force
     set-vmRightSize -targetVMName azvm01 -workspaceId e32b3dbe-2850-4f88-9acb-2b919cce4126 -WhatIf
 
     #>
@@ -550,7 +546,6 @@ function set-vmRightSize {
     Param(
         [Parameter(Mandatory)][String]$targetVMName,
         [Parameter(Mandatory)][Guid]$workspaceId, #workspace GUID where perf data is stored (use Get-AzOperationalInsightsWorkspace to find this)
-        $domain, #if your machines are domain joined, enter the domain name here
         [Int]$maintenanceWindowStartHour, #start hour of maintenancewindow in military time UTC (0-23)
         [Int]$maintenanceWindowLengthInHours, #length of maintenance window in hours (round up if needed)
         [ValidateSet(0, 1, 2, 3, 4, 5, 6)][Int]$maintenanceWindowDay, #day on which the maintenance window starts (UTC) where 0 = Sunday and 6 = Saturday
@@ -565,7 +560,7 @@ function set-vmRightSize {
         Write-Verbose "$targetVMName getting metadata"
         $vm = Get-AzVM -Name $targetVMName -Status
         Write-Verbose "$targetVMName calculating optimal size"
-        $optimalSize = get-vmRightSize -targetVMName $targetVMName -workspaceId $workspaceId -maintenanceWindowStartHour $maintenanceWindowStartHour -maintenanceWindowLengthInHours $maintenanceWindowLengthInHours -maintenanceWindowDay $maintenanceWindowDay -region $region -measurePeriodHours $measurePeriodHours -domain $domain
+        $optimalSize = get-vmRightSize -targetVMName $targetVMName -workspaceId $workspaceId -maintenanceWindowStartHour $maintenanceWindowStartHour -maintenanceWindowLengthInHours $maintenanceWindowLengthInHours -maintenanceWindowDay $maintenanceWindowDay -region $region -measurePeriodHours $measurePeriodHours
         if ($optimalSize -eq $vm.HardwareProfile.VmSize) {
             Write-Host "$targetVMName already at optimal size"
             if ($Report) {
