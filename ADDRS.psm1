@@ -14,7 +14,7 @@
     Updated: see Git: https://gitlab.com/Lieben/assortedFunctions/-/tree/master/ADDRS
 #>
 
-function set-vmToSize{
+function set-vmToSize {
     [cmdletbinding()]
     Param(
         [Parameter(Mandatory)][Object]$vm,
@@ -24,80 +24,85 @@ function set-vmToSize{
         [Switch]$WhatIf
     )
 
-    if($vm.HardwareProfile.VmSize -ne $newSize){
-        if($vm.PowerState -eq "VM running"){
-            if($Force){
+    if ($vm.HardwareProfile.VmSize -ne $newSize) {
+        if ($vm.PowerState -eq 'VM running') {
+            if ($Force) {
                 Write-Verbose "Stopping $($vm.Name) as it is running and -Force was specified"
-                if(!$WhatIf){
+                if (!$WhatIf) {
                     Stop-AzVM -Name $($vm.Name) -Confirm:$False -Force
                 }
                 Write-Verbose "Stopped $($vm.Name)"
-            }else{
+            }
+            else {
                 Throw "$($vm.Name) still running, cannot resize a running VM. Use -Force if you wish to shut down $($vm.Name) automatically"
             }
-        }else{
+        }
+        else {
             Write-Verbose "$($vm.Name) is already stopped or deallocated"
         }
         $vm.HardwareProfile.VmSize = $newSize
 
-        if(!$WhatIf){
-            Write-Verbose "Sending resize command"
+        if (!$WhatIf) {
+            Write-Verbose 'Sending resize command'
             $retVal = ($vm | Update-AzVM).StatusCode
             Write-Host "VM resize result: $($retVal)"
-        }else{
-            Write-Host "Not sending resize command because running in -WhatIf"
-            $retVal = "OK"
+        }
+        else {
+            Write-Host 'Not sending resize command because running in -WhatIf'
+            $retVal = 'OK'
         }
 
-        if($Boot){
-            if(!$WhatIf){
+        if ($Boot) {
+            if (!$WhatIf) {
                 Write-Verbose "Starting $($vm.Name) as -Boot was specified"
                 Start-AzVM -Name $($vm.Name) -Confirm:$False -NoWait
-            }else{
-                Write-Verbose "-Boot specified, but not booting as -WhatIf was specified"
+            }
+            else {
+                Write-Verbose '-Boot specified, but not booting as -WhatIf was specified'
             }
         }
         return $retVal
-    }else{
-        Throw "VM already at specified size"
+    }
+    else {
+        Throw 'VM already at specified size'
     }
 }
 
 
-function get-azureVMPricesAndPerformance{
+function get-azureVMPricesAndPerformance {
     [cmdletbinding()]
     Param(
         [String][Parameter(Mandatory)]$region
     )
     $vmPrices = @()
-    $vmPricingData = Invoke-RestMethod -Uri "https://prices.azure.com/api/retail/prices?meterRegion=primary&api-version=2021-10-01-preview&currencyCode='USD'&`$filter=serviceName eq 'Virtual Machines' and priceType eq 'Consumption' and armRegionName eq '$region'" -Usebasicparsing -Method GET -ContentType "application/json"
+    $vmPricingData = Invoke-RestMethod -Uri "https://prices.azure.com/api/retail/prices?meterRegion=primary&api-version=2021-10-01-preview&currencyCode='USD'&`$filter=serviceName eq 'Virtual Machines' and priceType eq 'Consumption' and armRegionName eq '$region'" -UseBasicParsing -Method GET -ContentType 'application/json'
     $vmPrices += $vmPricingData.Items
-    while($vmPricingData.NextPageLink){
-        $vmPricingData = Invoke-RestMethod -Uri $vmPricingData.NextPageLink -Usebasicparsing -Method GET -ContentType "application/json"
+    while ($vmPricingData.NextPageLink) {
+        $vmPricingData = Invoke-RestMethod -Uri $vmPricingData.NextPageLink -UseBasicParsing -Method GET -ContentType 'application/json'
         $vmPrices += $vmPricingData.Items
     }
 
     Write-Verbose "$($vmPrices.Count) prices retrieved, retrieving performance scores..."
 
-    $vmScoreRawData = (Invoke-RestMethod -Uri "https://raw.githubusercontent.com/MicrosoftDocs/azure-docs/main/articles/virtual-machines/linux/compute-benchmark-scores.md" -Method GET -UseBasicParsing) -split "`n"
+    $vmScoreRawData = (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/MicrosoftDocs/azure-docs/main/articles/virtual-machines/linux/compute-benchmark-scores.md' -Method GET -UseBasicParsing) -split "`n"
     $global:vmScoreData = @()
     $inTable = $False
-    for($l=0;$l -lt $vmScoreRawData.Count; $l++){
-        if($vmScoreRawData[$l].StartsWith("| VM Size |")){
+    for ($l = 0; $l -lt $vmScoreRawData.Count; $l++) {
+        if ($vmScoreRawData[$l].StartsWith('| VM Size |')) {
             #skip a line
             $l++
             $inTable = $True
             continue
         }
-        if($inTable){
-            if(!$vmScoreRawData[$l].StartsWith("| ")){
+        if ($inTable) {
+            if (!$vmScoreRawData[$l].StartsWith('| ')) {
                 $inTable = $False
                 continue
             }
-            $lineData = $vmScoreRawData[$l].Split("|")
+            $lineData = $vmScoreRawData[$l].Split('|')
             $global:vmScoreData += [PSCustomObject]@{
-                "type" = $lineData[1].Trim()
-                "perf" = $lineData[6].Trim()
+                'type' = $lineData[1].Trim()
+                'perf' = $lineData[6].Trim()
             }
         }
     }
@@ -105,22 +110,22 @@ function get-azureVMPricesAndPerformance{
     Write-Verbose "$($global:vmScoreData.Count) performance rows retrieved, merging data..."
 
     $global:azureVMPrices = @()
-    $vmPrices = $vmPrices | where{-Not($_.skuName.EndsWith("Spot")) -and -Not($_.skuName.EndsWith("Low Priority"))}
-    foreach($sku in ($vmPrices.armSkuName | Select-Object -Unique)){
-        $vmPricing = $vmPrices | where{$_.armSkuName -eq $sku}
+    $vmPrices = $vmPrices | Where-Object { -Not($_.skuName.EndsWith('Spot')) -and -Not($_.skuName.EndsWith('Low Priority')) }
+    foreach ($sku in ($vmPrices.armSkuName | Select-Object -Unique)) {
+        $vmPricing = $vmPrices | Where-Object { $_.armSkuName -eq $sku }
         $obj = [PSCustomObject]@{
-            "Name" = $sku
-            "numberOfCores" = $($global:azureAvailableVMSizes | where{$_.Name -eq $sku}).NumberOfCores
-            "memoryInMB" = $($global:azureAvailableVMSizes | where{$_.Name -eq $sku}).MemoryInMB
-            "linuxPrice" = $($vmPricing | where{!$_.productName.EndsWith("Windows")}).retailPrice
-            "windowsPrice" = $($vmPricing | where{$_.productName.EndsWith("Windows")}).retailPrice
-            "perf" = $($global:vmScoreData | where{$_.type -eq $sku} | Sort-Object -Property perf | Select-Object -Last 1).perf
+            'Name'          = $sku
+            'numberOfCores' = $($global:azureAvailableVMSizes | Where-Object { $_.Name -eq $sku }).NumberOfCores
+            'memoryInMB'    = $($global:azureAvailableVMSizes | Where-Object { $_.Name -eq $sku }).MemoryInMB
+            'linuxPrice'    = $($vmPricing | Where-Object { !$_.productName.EndsWith('Windows') }).retailPrice
+            'windowsPrice'  = $($vmPricing | Where-Object { $_.productName.EndsWith('Windows') }).retailPrice
+            'perf'          = $($global:vmScoreData | Where-Object { $_.type -eq $sku } | Sort-Object -Property perf | Select-Object -Last 1).perf
         }
-        $global:azureVMPrices+= $obj
+        $global:azureVMPrices += $obj
     }
 }
 
-function get-vmRightSize{
+function get-vmRightSize {
     [cmdletbinding()]
     Param(
         [Parameter(Mandatory)][String]$targetVMName,
@@ -128,24 +133,24 @@ function get-vmRightSize{
         $domain, #if your machines are domain joined, enter the domain name here
         [Int]$maintenanceWindowStartHour, #start hour of maintenancewindow in military time UTC (0-23)
         [Int]$maintenanceWindowLengthInHours, #length of maintenance window in hours (round up if needed)
-        [ValidateSet(0,1,2,3,4,5,6)][Int]$maintenanceWindowDay, #day on which the maintenance window starts (UTC) where 0 = Sunday and 6 = Saturday
-        [String]$region = "westeurope", #you can find yours using Get-AzLocation | select Location
+        [ValidateSet(0, 1, 2, 3, 4, 5, 6)][Int]$maintenanceWindowDay, #day on which the maintenance window starts (UTC) where 0 = Sunday and 6 = Saturday
+        [String]$region = 'westeurope', #you can find yours using Get-AzLocation | select Location
         [Int]$measurePeriodHours = 152 #lookback period for a VM's performance while it was online, this is used to calculate the optimum. It is not recommended to size multiple times in this period!
     )
 
     $script:reportRow = [PSCustomObject]@{
-        "vmName"=$targetVMName
-        "currentSize"=$Null
-        "targetSize"=$Null
-        "currentCPU"=$Null
-        "minRequiredCPU"=$Null
-        "currentRAM"=$Null
-        "minRequiredRAM"=$Null
-        "currentPerfScore"=$Null
-        "targetPerfScore"=$Null
-        "resized"=$False
-        "costImpactPercent"=$Null
-        "reason"=$Null
+        'vmName'            = $targetVMName
+        'currentSize'       = $Null
+        'targetSize'        = $Null
+        'currentCPU'        = $Null
+        'minRequiredCPU'    = $Null
+        'currentRAM'        = $Null
+        'minRequiredRAM'    = $Null
+        'currentPerfScore'  = $Null
+        'targetPerfScore'   = $Null
+        'resized'           = $False
+        'costImpactPercent' = $Null
+        'reason'            = $Null
     }
 
     #####CONFIGURATION##########################
@@ -183,203 +188,212 @@ function get-vmRightSize{
     $mll = $memoryTrigger - $rightSizingMinimumDifferencePercent
 
     #determine Azure Monitor query parameters in case a maintenance window was specified
-    if($domain){
+    if ($domain) {
         $domain = ".$($domain)"
     }
-    if($maintenanceWindowStartHour -and $maintenanceWindowDay -and $maintenanceWindowLengthInHours){
+    if ($maintenanceWindowStartHour -and $maintenanceWindowDay -and $maintenanceWindowLengthInHours) {
         $start = ([datetime]"2022-02-01T$($maintenanceWindowStartHour):00:00")
         $end = $start.AddHours($maintenanceWindowLengthInHours)
-        if($start.Day -eq $end.Day){
+        if ($start.Day -eq $end.Day) {
             $queryAddition = " and ((dayofweek(TimeGenerated) == $($maintenanceWindowDay)d and (hourofday(TimeGenerated) < $maintenanceWindowStartHour or hourofday(TimeGenerated) > $($end.Hour))) or dayofweek(TimeGenerated) != $($maintenanceWindowDay)d)"
-        }else{
+        }
+        else {
             $queryAddition = " and ((dayofweek(TimeGenerated) == $($maintenanceWindowDay)d and (hourofday(TimeGenerated) < $maintenanceWindowStartHour)) or dayofweek(TimeGenerated) != $($maintenanceWindowDay)d) and ((dayofweek(TimeGenerated) == $($maintenanceWindowDay+1)d and (hourofday(TimeGenerated) > $($end.Hour))) or dayofweek(TimeGenerated) != $($maintenanceWindowDay+1)d)"
         }
         Write-Verbose "$targetVMName grabbing data to calculate optimal size excluding maintenance window on day $maintenanceWindowDay at $maintenanceWindowStartHour for $maintenanceWindowLengthInHours hours"
-    }else{
+    }
+    else {
         $queryAddition = $Null
         Write-Verbose "$targetVMName grabbing data to calculate optimal size"
     }
 
     #use a global var to cache data between subsequent calls to list all available Azure VM sizes in the region
-    if(!$global:azureAvailableVMSizes){
-        try{
+    if (!$global:azureAvailableVMSizes) {
+        try {
             Write-Host "No VM size cache for $region yet, creating this first...."
             $global:azureAvailableVMSizes = Get-AzVMSize -Location $region -ErrorAction Stop
-            Write-Host "VM Size cache created"
+            Write-Host 'VM Size cache created'
             Write-Verbose "Cached the following available VM types in $region :"
-            Write-Verbose ($global:azureAvailableVMSizes.Name -Join ",")
-        }catch{
+            Write-Verbose ($global:azureAvailableVMSizes.Name -Join ',')
+        }
+        catch {
             Throw "$targetVMName failed to retrieve available Azure VM sizes in region $region because of $_"
         }
     }
 
     #use a global var to cache data between subsequent calls to list cost and performance data in the selected region
-    if(!$global:azureVMPrices){
-        try{
-            Write-Host "No cache of VM performance and pricing data yet, creating this first...."
+    if (!$global:azureVMPrices) {
+        try {
+            Write-Host 'No cache of VM performance and pricing data yet, creating this first....'
             get-azureVMPricesAndPerformance -region $region
-            Write-Host "VM Performance and pricing data cached"
-        }catch{
+            Write-Host 'VM Performance and pricing data cached'
+        }
+        catch {
             Throw "$targetVMName failed to get pricing and performance data for Azure VM sizes because of $_"
         }
     }
 
     #enrich all allowed VM's with pricing data and remove any that are not availabe in the selected region
     $selectedVMTypes = @()
-    foreach($allowedVMType in $allowedVMTypes){
-        if($azureAvailableVMSizes.Name -contains $allowedVMType){
+    foreach ($allowedVMType in $allowedVMTypes) {
+        if ($azureAvailableVMSizes.Name -contains $allowedVMType) {
             $vmPricingInfo = $Null
-            $vmPricingInfo = $azureVMPrices | where{$_.Name -eq $allowedVMType}
-            if($vmPricingInfo){
+            $vmPricingInfo = $azureVMPrices | Where-Object { $_.Name -eq $allowedVMType }
+            if ($vmPricingInfo) {
                 $selectedVMTypes += [PSCustomObject]@{
-                    "Name" = $allowedVMType
-                    "NumberOfCores" = $vmPricingInfo.numberOfCores
-                    "MemoryInMB" = $vmPricingInfo.memoryInMB
-                    "linuxPrice" = $vmPricingInfo.linuxPrice
-                    "windowsPrice" = $vmPricingInfo.windowsPrice #https://docs.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices
-                    "perf" = $vmPricingInfo.perf #https://docs.microsoft.com/en-us/azure/virtual-machines/linux/compute-benchmark-scores#about-coremark
+                    'Name'          = $allowedVMType
+                    'NumberOfCores' = $vmPricingInfo.numberOfCores
+                    'MemoryInMB'    = $vmPricingInfo.memoryInMB
+                    'linuxPrice'    = $vmPricingInfo.linuxPrice
+                    'windowsPrice'  = $vmPricingInfo.windowsPrice #https://docs.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices
+                    'perf'          = $vmPricingInfo.perf #https://docs.microsoft.com/en-us/azure/virtual-machines/linux/compute-benchmark-scores#about-coremark
                 }
             }
         }
     }
 
     #sort the VM types we may use based on their price first, then performance rating
-    $selectedVMTypes = $selectedVMTypes | Sort-Object @{e={$_.windowsPrice};a=1},@{e={$_.perf}; a=0},@{e={$_.Name.Split("_")[-1]}; a=0}
+    $selectedVMTypes = $selectedVMTypes | Sort-Object @{e = { $_.windowsPrice }; a = 1 }, @{e = { $_.perf }; a = 0 }, @{e = { $_.Name.Split('_')[-1] }; a = 0 }
     #get meta data of targeted VM
-    try{
+    try {
         $targetVM = Get-AzVM -Name $targetVMName
         $script:reportRow.currentSize = $targetVM.HardwareProfile.VmSize
 
         $targetVMPricing = $Null
-        $targetVMPricing = $azureVMPrices | where{$_.name -eq $targetVM.HardwareProfile.VmSize}
+        $targetVMPricing = $azureVMPrices | Where-Object { $_.name -eq $targetVM.HardwareProfile.VmSize }
         # Try the non-'s' version of the VM if pricing for the 's' version is not available, as they're often the same price
-        if ($null -eq $targetVMPricing){
-            $targetVMPricing = $azureVMPrices | where{$_.name -eq ($targetVM.HardwareProfile.VmSize -creplace 's', '')}
+        if ($null -eq $targetVMPricing) {
+            $targetVMPricing = $azureVMPrices | Where-Object { $_.name -eq ($targetVM.HardwareProfile.VmSize -creplace 's', '') }
         }
 
-        $targetVMCurrentHardware = $global:azureAvailableVMSizes | where{$_.Name -eq $targetVM.HardwareProfile.VmSize}
-        if(!$targetVMCurrentHardware){
+        $targetVMCurrentHardware = $global:azureAvailableVMSizes | Where-Object { $_.Name -eq $targetVM.HardwareProfile.VmSize }
+        if (!$targetVMCurrentHardware) {
             Throw "Current VM type $($targetVM.HardwareProfile.VmSize) could not be found in Azure's Available VM list, please resize manually to a currently supported size before using this function or wait until it becomes available again (this is sometimes transitive while Msft scales to customer demand)"
         }
         $script:reportRow.currentCPU = $targetVMCurrentHardware.NumberOfCores
         $script:reportRow.currentRAM = $targetVMCurrentHardware.MemoryInMB
-        $script:reportRow.currentPerfScore = $($global:vmScoreData | where{$_.type -eq $targetVM.HardwareProfile.VmSize} | Sort-Object -Property perf | Select-Object -Last 1).perf
+        $script:reportRow.currentPerfScore = $($global:vmScoreData | Where-Object { $_.type -eq $targetVM.HardwareProfile.VmSize } | Sort-Object -Property perf | Select-Object -Last 1).perf
         Write-Verbose "$targetVMName currently runs on $($targetVMCurrentHardware.NumberOfCores) vCPU's and $($targetVMCurrentHardware.MemoryInMB)MB memory ($($targetVM.HardwareProfile.VmSize))"
-    }catch{
+    }
+    catch {
         Throw "$targetVMName failed to get VM metadata from Azure because of $_"
     }
 
     #check for the LCRightSizeConfig tag
-    if($targetVM.Tags["LCRightSizeConfig"]){
-        Write-Verbose "$targetVMName has right sizing tag with value $($targetVM.Tags["LCRightSizeConfig"])"
-        if($targetVM.Tags["LCRightSizeConfig"] -eq "disabled"){
+    if ($targetVM.Tags['LCRightSizeConfig']) {
+        Write-Verbose "$targetVMName has right sizing tag with value $($targetVM.Tags['LCRightSizeConfig'])"
+        if ($targetVM.Tags['LCRightSizeConfig'] -eq 'disabled') {
             Throw "$targetVMName right sizing disabled through Azure Tag"
-        }else{
-            $script:reportRow.targetSize = $targetVM.Tags["LCRightSizeConfig"]
-            return $targetVM.Tags["LCRightSizeConfig"]
+        }
+        else {
+            $script:reportRow.targetSize = $targetVM.Tags['LCRightSizeConfig']
+            return $targetVM.Tags['LCRightSizeConfig']
         }
     }
 
     #get memory performance of targeted VM in configured period
-    try{
+    try {
         $query = "Perf | where TimeGenerated between (ago($($measurePeriodHours)h) .. ago(0h)) and CounterName startswith 'Available Mbytes' and Computer startswith '$($targetVMName)$($domain)'$queryAddition | project TimeGenerated, CounterValue | order by CounterValue"
         Write-Verbose "$targetVMName querying log analytics: $query"
         $result = Invoke-AzOperationalInsightsQuery -WorkspaceId $workspaceId -Query $query -ErrorAction Stop
         $resultsArray = [System.Linq.Enumerable]::ToArray($result.Results)
         Write-Verbose "$targetVMName retrieved $($resultsArray.Count) MB (LA type counter) memory datapoints from Azure Monitor"
-        if($resultsArray.Count -le 0){
-            Write-Verbose "No data returned by Log Analytics for LA type counter, checking for AM type counter"
+        if ($resultsArray.Count -le 0) {
+            Write-Verbose 'No data returned by Log Analytics for LA type counter, checking for AM type counter'
             $query = "Perf | where TimeGenerated between (ago($($measurePeriodHours)h) .. ago(0h)) and CounterName startswith 'Available Bytes' and Computer startswith '$($targetVMName)$($domain)'$queryAddition | project TimeGenerated, CounterValue | order by CounterValue"
             Write-Verbose "$targetVMName querying azure monitor: $query"
             $result = Invoke-AzOperationalInsightsQuery -WorkspaceId $workspaceId -Query $query -ErrorAction Stop
             $resultsArray = [System.Linq.Enumerable]::ToArray($result.Results)
-            if($resultsArray.Count -le 0){
-                Write-Verbose "No data returned by Log Analytics for AM type counter"
+            if ($resultsArray.Count -le 0) {
+                Write-Verbose 'No data returned by Log Analytics for AM type counter'
                 Throw "no data returned by Log Analytics. Was the VM turned on the past hours, and has the 'Available Mbytes' or 'Available Bytes' counter been turned on, and do you have permissions to query Log Analytics?"
-            }else{
-                $resultsArray | % {[PSCustomObject]@{"TimeGenerated" = $_.TimeGenerated;"CounterValue"=$_.CounterValue/1MB}}
+            }
+            else {
+                $resultsArray | ForEach-Object { [PSCustomObject]@{'TimeGenerated' = $_.TimeGenerated; 'CounterValue' = $_.CounterValue / 1MB } }
             }
         }
         #we need to ensure enough datapoints exist
-        if($resultsArray.Count -le $measurePeriodHours*4){
-            if($defaultSize){
+        if ($resultsArray.Count -le $measurePeriodHours * 4) {
+            if ($defaultSize) {
                 Write-Verbose "Insufficient performance data to right size, default size specified at $defaultSize"
                 $script:reportRow.targetSize = $defaultSize
                 return $defaultSize
             }
-            Throw "too few MEM perf data points to reliably calculate optimal VM size"
+            Throw 'too few MEM perf data points to reliably calculate optimal VM size'
         }
         $memoryStats = get-vmCounterStats -Data $resultsArray.CounterValue
         #memory is expressed in Free MB's, recalculate to used % so we can apply similar logic as with CPU's
-        $memUsedPct = (($targetVMCurrentHardware.MemoryInMB-$memoryStats.Percentile5)/$targetVMCurrentHardware.MemoryInMB)
-        if($memUsedPct -gt 100 -or $memUsedPct -lt 0 -or $memoryStats.Maximum -gt $targetVMCurrentHardware.MemoryInMB){
+        $memUsedPct = (($targetVMCurrentHardware.MemoryInMB - $memoryStats.Percentile5) / $targetVMCurrentHardware.MemoryInMB)
+        if ($memUsedPct -gt 100 -or $memUsedPct -lt 0 -or $memoryStats.Maximum -gt $targetVMCurrentHardware.MemoryInMB) {
             Throw "Unexpected (negative or too large) memory perf value detected, VM was probably already resized less than $measurePeriodHours hours ago"
         }
-    }catch{
+    }
+    catch {
         Throw "$targetVMName failed to get memory performance data from Azure Monitor because $_"
     }
 
     Write-Verbose "$targetVMName has $($targetVMCurrentHardware.MemoryInMB)MB and in the top 5% of the time it averages at $($targetVMCurrentHardware.MemoryInMB - $memoryStats.Percentile5)MB ($([Math]::Round($memUsedPct*100,2))%) used"
 
     #get cpu performance of targeted VM in configured period
-    try{
+    try {
         $query = "Perf | where TimeGenerated between (ago($($measurePeriodHours)h) .. ago(0h)) and CounterName =~ '% Processor Time' and Computer startswith '$($targetVMName)$($domain)'$queryAddition | project TimeGenerated, CounterValue | order by CounterValue"
         Write-Verbose "$targetVMName querying azure monitor: $query"
         $result = Invoke-AzOperationalInsightsQuery -WorkspaceId $workspaceId -Query $query -ErrorAction Stop
         $resultsArray = [System.Linq.Enumerable]::ToArray($result.Results)
         Write-Verbose "$targetVMName retrieved $($resultsArray.Count) cpu datapoints from Azure Monitor"
-        if($resultsArray.Count -le 0){
-            Write-Verbose "No data returned by Log Analytics"
+        if ($resultsArray.Count -le 0) {
+            Write-Verbose 'No data returned by Log Analytics'
             Throw "no data returned by Log Analytics. Was the VM turned on the past hours, and has the '% Processor Time' counter been turned on, and do you have permissions to query Log Analytics?"
         }
         #we need to ensure enough datapoints exist
-        if($resultsArray.Count -le $measurePeriodHours*4){
-            if($defaultSize){
+        if ($resultsArray.Count -le $measurePeriodHours * 4) {
+            if ($defaultSize) {
                 Write-Verbose "Insufficient performance data to right size, default size specified at $defaultSize"
                 $script:reportRow.targetSize = $defaultSize
                 return $defaultSize
             }
-            Throw "too few CPU perf data points to reliably calculate optimal VM size"
+            Throw 'too few CPU perf data points to reliably calculate optimal VM size'
         }
         $cpuStats = get-vmCounterStats -Data $resultsArray.CounterValue
-        $cpuUsedPct = $cpuStats.Percentile95/100
-        if($cpuUsedPct -lt 0){
+        $cpuUsedPct = $cpuStats.Percentile95 / 100
+        if ($cpuUsedPct -lt 0) {
             Throw "Negative value detected, VM was probably already resized less than $measurePeriodHours hours ago"
         }
-    }catch{
+    }
+    catch {
         Throw "$targetVMName failed to get CPU performnace data from Azure Monitor because $_"
     }
 
     Write-Verbose "$targetVMName has $($targetVMCurrentHardware.NumberOfCores) cpu cores and in the top 5% of the time it averages at $([Math]::Round($cpuStats.Percentile95,2))% max of the cores"
 
-    $targetMinimumCPUCount=$targetVMCurrentHardware.NumberOfCores
-    $targetMinimumMemoryInMB=$targetVMCurrentHardware.MemoryInMB
+    $targetMinimumCPUCount = $targetVMCurrentHardware.NumberOfCores
+    $targetMinimumMemoryInMB = $targetVMCurrentHardware.MemoryInMB
 
     #determine if CPU needs to be increased
-    if($cpuUsedPct -gt $cul){
-        $targetMinimumCPUCount = [Math]::Min($maxvCPUs,[Math]::Max($minvCPUs,[Math]::Ceiling($targetVMCurrentHardware.NumberOfCores*($cpuUsedPct/$cll))))
+    if ($cpuUsedPct -gt $cul) {
+        $targetMinimumCPUCount = [Math]::Min($maxvCPUs, [Math]::Max($minvCPUs, [Math]::Ceiling($targetVMCurrentHardware.NumberOfCores * ($cpuUsedPct / $cll))))
     }
 
     #determine if CPU needs to be decreased
-    if($cpuUsedPct -lt $cll){
-        $targetMinimumCPUCount = [Math]::Max($minvCPUs,[Math]::Min($maxvCPUs,[Math]::Ceiling($targetVMCurrentHardware.NumberOfCores*($cpuUsedPct/$cul))))
+    if ($cpuUsedPct -lt $cll) {
+        $targetMinimumCPUCount = [Math]::Max($minvCPUs, [Math]::Min($maxvCPUs, [Math]::Ceiling($targetVMCurrentHardware.NumberOfCores * ($cpuUsedPct / $cul))))
     }
 
     #determine if Memory needs to be increased
-    if($memUsedPct -gt $mul){
-        $targetMinimumMemoryInMB = [Math]::Min($maxMemoryGB*1024,[Math]::Max($minMemoryGB*1024,[Math]::Ceiling($targetVMCurrentHardware.MemoryInMB*($memUsedPct/$mll))))
+    if ($memUsedPct -gt $mul) {
+        $targetMinimumMemoryInMB = [Math]::Min($maxMemoryGB * 1024, [Math]::Max($minMemoryGB * 1024, [Math]::Ceiling($targetVMCurrentHardware.MemoryInMB * ($memUsedPct / $mll))))
     }
 
     #determine if memory needs to be decreased
-    if($memUsedPct -lt $mll){
-        $targetMinimumMemoryInMB = [Math]::Max($minMemoryGB*1024,[Math]::Min($maxMemoryGB*1024,[Math]::Ceiling($targetVMCurrentHardware.MemoryInMB*($memUsedPct/$mul))))
+    if ($memUsedPct -lt $mll) {
+        $targetMinimumMemoryInMB = [Math]::Max($minMemoryGB * 1024, [Math]::Min($maxMemoryGB * 1024, [Math]::Ceiling($targetVMCurrentHardware.MemoryInMB * ($memUsedPct / $mul))))
     }
 
     Write-Verbose "$targetVMName should have at least $targetMinimumCPUCount vCPU's and $targetMinimumMemoryInMB MB memory"
 
     $desiredVMType = $Null
-    for($i=0;$i -lt $selectedVMTypes.Count;$i++){
-        if($selectedVMTypes[$i].NumberOfCores -ge $targetMinimumCPUCount -and $selectedVMTypes[$i].NumberOfCores -le $maxvCPUs -and $selectedVMTypes[$i].MemoryInMB -le $maxMemoryGB*1024 -and $selectedVMTypes[$i].MemoryInMB -ge $targetMinimumMemoryInMB){
+    for ($i = 0; $i -lt $selectedVMTypes.Count; $i++) {
+        if ($selectedVMTypes[$i].NumberOfCores -ge $targetMinimumCPUCount -and $selectedVMTypes[$i].NumberOfCores -le $maxvCPUs -and $selectedVMTypes[$i].MemoryInMB -le $maxMemoryGB * 1024 -and $selectedVMTypes[$i].MemoryInMB -ge $targetMinimumMemoryInMB) {
             $desiredVMType = $selectedVMTypes[$i]
             $script:reportRow.targetSize = $desiredVMType.Name
             $script:reportRow.minRequiredCPU = $targetMinimumCPUCount
@@ -389,22 +403,24 @@ function get-vmRightSize{
         }
     }
 
-    if($targetVMPricing -and $desiredVMType){
-        $costFactor = ($targetVMPricing.windowsPrice-$desiredVMType.windowsPrice)/$targetVMPricing.windowsPrice
+    if ($targetVMPricing -and $desiredVMType) {
+        $costFactor = ($targetVMPricing.windowsPrice - $desiredVMType.windowsPrice) / $targetVMPricing.windowsPrice
     }
 
-    if($desiredVMType){
-        if($desiredVMType.Name -eq $targetVM.HardwareProfile.VmSize){
+    if ($desiredVMType) {
+        if ($desiredVMType.Name -eq $targetVM.HardwareProfile.VmSize) {
             Write-Verbose "$targetVMName is already sized correctly at $($targetVM.HardwareProfile.VmSize)"
             return $targetVM.HardwareProfile.VmSize
-        }else{
-            if($costFactor){
-                if($costFactor -gt 0){
+        }
+        else {
+            if ($costFactor) {
+                if ($costFactor -gt 0) {
                     Write-Verbose "$targetVMName financial impact: $([Math]::Round($costFactor*100,2))% cost reduction"
-                }else{
+                }
+                else {
                     Write-Verbose "$targetVMName financial impact: $([Math]::Round($costFactor*100*-1,2))% cost increase"
                 }
-                $script:reportRow.costImpactPercent = $costFactor*-100
+                $script:reportRow.costImpactPercent = $costFactor * -100
             }
             Write-Verbose "$targetVMName should be resized from $($targetVM.HardwareProfile.VmSize) to $($desiredVMType.Name)"
             Write-Verbose "$targetVMName $($desiredVMType.Name) has $($desiredVMType.NumberOfCores) vCPU's and $($desiredVMType.MemoryInMB)MB Memory"
@@ -414,7 +430,7 @@ function get-vmRightSize{
 }
 
 
-function get-vmCounterStats{
+function get-vmCounterStats {
     [cmdletbinding()]
     Param(
         [Parameter(Mandatory)]$Data
@@ -426,7 +442,8 @@ function get-vmCounterStats{
         $LowerMedian = $Data[$MedianIndex]
         $UpperMedian = $Data[$MedianIndex - 1]
         $Median = ($LowerMedian + $UpperMedian) / 2
-    } else {
+    }
+    else {
         $MedianIndex = [math]::Ceiling(($Data.Count - 1) / 2)
         $Median = $Data[$MedianIndex]
     }
@@ -462,7 +479,7 @@ function get-vmCounterStats{
     Return $Stats
 }
 
-function set-rsgRightSize{
+function set-rsgRightSize {
     <#
 
     .SYNOPSIS
@@ -483,8 +500,8 @@ function set-rsgRightSize{
         $domain, #if your machines are domain joined, enter the domain name here
         [Int]$maintenanceWindowStartHour, #start hour of maintenancewindow in military time UTC (0-23)
         [Int]$maintenanceWindowLengthInHours, #length of maintenance window in hours (round up if needed)
-        [ValidateSet(0,1,2,3,4,5,6)][Int]$maintenanceWindowDay, #day on which the maintenance window starts (UTC) where 0 = Sunday and 6 = Saturday
-        [String]$region = "westeurope", #you can find yours using Get-AzLocation | select Location
+        [ValidateSet(0, 1, 2, 3, 4, 5, 6)][Int]$maintenanceWindowDay, #day on which the maintenance window starts (UTC) where 0 = Sunday and 6 = Saturday
+        [String]$region = 'westeurope', #you can find yours using Get-AzLocation | select Location
         [Int]$measurePeriodHours = 168, #lookback period for a VM's performance while it was online, this is used to calculate the optimum. It is not recommended to size multiple times in this period!
         [Switch]$Force, #shuts a VM down to resize it if it detects the VM is still running when you run this command
         [Switch]$Boot, #after resizing, by default a VM stays offline. Use -Boot to automatically start if after resizing
@@ -495,26 +512,27 @@ function set-rsgRightSize{
     Write-Verbose "Getting VM's for RSG $targetRSG"
     $targetVMs = Get-AzVM -ResourceGroupName $targetRSG -ErrorAction Stop
     $reportRows = @()
-    foreach($vm in $targetVMs){
+    foreach ($vm in $targetVMs) {
         Write-Verbose "calling set-vmRightSize for $($vm.Name)"
         $retVal = set-vmRightSize -targetVMName $vm.Name -domain $domain -workspaceId $workspaceId -maintenanceWindowStartHour $maintenanceWindowStartHour -maintenanceWindowLengthInHours $maintenanceWindowLengthInHours -maintenanceWindowDay $maintenanceWindowDay -region $region -measurePeriodHours $measurePeriodHours -Report:$Report.IsPresent -Force:$Force.IsPresent -Boot:$Boot.IsPresent -WhatIf:$WhatIf.IsPresent
-        if($Report){
+        if ($Report) {
             $reportRows += $retVal
-        }else{
+        }
+        else {
             $retVal
         }
     }
-    if($Report){
+    if ($Report) {
         $reportPath = Join-Path $Env:TEMP -ChildPath "addrs-report-$targetRSG.csv"
         Write-Output "Writing report with $($reportRows.Count) lines to $reportPath"
-        $reportRows | Export-CSV -Path $reportPath -Force -Encoding UTF8 -NoTypeInformation -Confirm:$False
+        $reportRows | Export-Csv -Path $reportPath -Force -Encoding UTF8 -NoTypeInformation -Confirm:$False
         Start-Process $reportPath
-        Write-Output "Report written and launched, script has completed"
+        Write-Output 'Report written and launched, script has completed'
     }
 
 }
 
-function set-vmRightSize{
+function set-vmRightSize {
     <#
 
     .SYNOPSIS
@@ -535,44 +553,49 @@ function set-vmRightSize{
         $domain, #if your machines are domain joined, enter the domain name here
         [Int]$maintenanceWindowStartHour, #start hour of maintenancewindow in military time UTC (0-23)
         [Int]$maintenanceWindowLengthInHours, #length of maintenance window in hours (round up if needed)
-        [ValidateSet(0,1,2,3,4,5,6)][Int]$maintenanceWindowDay, #day on which the maintenance window starts (UTC) where 0 = Sunday and 6 = Saturday
-        [String]$region = "westeurope", #you can find yours using Get-AzLocation | select Location
+        [ValidateSet(0, 1, 2, 3, 4, 5, 6)][Int]$maintenanceWindowDay, #day on which the maintenance window starts (UTC) where 0 = Sunday and 6 = Saturday
+        [String]$region = 'westeurope', #you can find yours using Get-AzLocation | select Location
         [Int]$measurePeriodHours = 152, #lookback period for a VM's performance while it was online, this is used to calculate the optimum. It is not recommended to size multiple times in this period!
         [Switch]$Force, #shuts a VM down to resize it if it detects the VM is still running when you run this command
         [Switch]$Boot, #after resizing, by default a VM stays offline. Use -Boot to automatically start if after resizing
         [Switch]$WhatIf, #best used together with -Verbose. Causes the script not to modify anything, just to log what it would do
         [Switch]$Report
     )
-    try{
+    try {
         Write-Verbose "$targetVMName getting metadata"
         $vm = Get-AzVM -Name $targetVMName -Status
         Write-Verbose "$targetVMName calculating optimal size"
         $optimalSize = get-vmRightSize -targetVMName $targetVMName -workspaceId $workspaceId -maintenanceWindowStartHour $maintenanceWindowStartHour -maintenanceWindowLengthInHours $maintenanceWindowLengthInHours -maintenanceWindowDay $maintenanceWindowDay -region $region -measurePeriodHours $measurePeriodHours -domain $domain
-        if($optimalSize -eq $vm.HardwareProfile.VmSize){
+        if ($optimalSize -eq $vm.HardwareProfile.VmSize) {
             Write-Host "$targetVMName already at optimal size"
-            if($Report){
+            if ($Report) {
                 return $script:reportRow
-            }else{
+            }
+            else {
                 return $False
             }
-        }else{
+        }
+        else {
             Write-Host "$targetVMName resizing from $($vm.HardwareProfile.VmSize) to $optimalSize ..."
             $retVal = set-vmToSize -vm $vm -newSize $optimalSize -Force:$Force.IsPresent -Boot:$Boot.IsPresent -WhatIf:$WhatIf.IsPresent
-            if($retVal -eq "OK"){
+            if ($retVal -eq 'OK') {
                 $script:reportRow.resized = $True
             }
-            if($Report){
+            if ($Report) {
                 return $script:reportRow
-            }else{
+            }
+            else {
                 return $retVal
             }
         }
-    }catch{
+    }
+    catch {
         Write-Error $_
-        if($Report){
+        if ($Report) {
             $script:reportRow.reason = $_
             return $script:reportRow
-        }else{
+        }
+        else {
             return $False
         }
     }
