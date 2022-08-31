@@ -158,8 +158,23 @@ function get-vmRightSize{
     $maxvCPUs = 12 #in no case will this function assign a vmtype with more vCPU's than this
     #the following is a 'allowedList' of VM types to prevent the function from selecting undesired VM types
     #this function will select the optimum VM that meets CPU/MEM requirements based first on cost, then performance, then version (if known)
-    $allowedVMTypes = @("Standard_D2ds_v4","Standard_D4ds_v4","Standard_D8ds_v4","Standard_D2ds_v5","Standard_D4ds_v5","Standard_D8ds_v5","Standard_E2ds_v4","Standard_E4ds_v4","Standard_E8ds_v4","Standard_E2ds_v5","Standard_E4ds_v5","Standard_E8ds_v5","Standard_F2s_v2","Standard_F4s_v2","Standard_F8s_v2","Standard_B2s","Standard_B2ms")
-    $defaultSize = "" #if specified, VM's that do not have performance data will be sized to this size as the fallback size. If you don't specify anything, they will remain at their current size untill performance data for right sizing is available
+    $allowedVMTypes = @(
+        'Standard_D2ds_v5',
+        'Standard_D4ds_v5',
+        'Standard_D8ds_v5',
+        'Standard_E2ds_v5',
+        'Standard_E4ds_v5',
+        'Standard_E8ds_v5',
+        'Standard_D2ads_v5',
+        'Standard_D4ads_v5',
+        'Standard_D8ads_v5',
+        'Standard_E2ads_v5',
+        'Standard_E4ads_v5',
+        'Standard_E8ads_v5',
+        'Standard_F2s_v2',
+        'Standard_F4s_v2',
+        'Standard_F8s_v2')
+    $defaultSize = '' #if specified, VM's that do not have performance data will be sized to this size as the fallback size. If you don't specify anything, they will remain at their current size untill performance data for right sizing is available
     #####END OF OPTIONAL CONFIGURATION#########
 
     $cul = $vCPUTrigger + $rightSizingMinimumDifferencePercent
