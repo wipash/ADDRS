@@ -80,7 +80,7 @@ function get-azureVMPricesAndPerformance{
     Write-Verbose "$($vmPrices.Count) prices retrieved, retrieving performance scores..."
 
     $vmScoreRawData = (Invoke-RestMethod -Uri "https://raw.githubusercontent.com/MicrosoftDocs/azure-docs/main/articles/virtual-machines/linux/compute-benchmark-scores.md" -Method GET -UseBasicParsing) -split "`n"
-    $script:vmScoreData = @()
+    $global:vmScoreData = @()
     $inTable = $False
     for($l=0;$l -lt $vmScoreRawData.Count; $l++){
         if($vmScoreRawData[$l].StartsWith("| VM Size |")){
@@ -95,14 +95,14 @@ function get-azureVMPricesAndPerformance{
                 continue
             }
             $lineData = $vmScoreRawData[$l].Split("|")
-            $script:vmScoreData += [PSCustomObject]@{
+            $global:vmScoreData += [PSCustomObject]@{
                 "type" = $lineData[1].Trim()
                 "perf" = $lineData[6].Trim()
             }
         }
     }
 
-    Write-Verbose "$($script:vmScoreData.Count) performance rows retrieved, merging data..."
+    Write-Verbose "$($global:vmScoreData.Count) performance rows retrieved, merging data..."
 
     $global:azureVMPrices = @()
     $vmPrices = $vmPrices | where{-Not($_.skuName.EndsWith("Spot")) -and -Not($_.skuName.EndsWith("Low Priority"))}
@@ -114,7 +114,7 @@ function get-azureVMPricesAndPerformance{
             "memoryInMB" = $($global:azureAvailableVMSizes | where{$_.Name -eq $sku}).MemoryInMB
             "linuxPrice" = $($vmPricing | where{!$_.productName.EndsWith("Windows")}).retailPrice
             "windowsPrice" = $($vmPricing | where{$_.productName.EndsWith("Windows")}).retailPrice
-            "perf" = $($script:vmScoreData | where{$_.type -eq $sku} | Sort-Object -Property perf | Select-Object -Last 1).perf
+            "perf" = $($global:vmScoreData | where{$_.type -eq $sku} | Sort-Object -Property perf | Select-Object -Last 1).perf
         }
         $global:azureVMPrices+= $obj
     }
@@ -244,7 +244,7 @@ function get-vmRightSize{
         }
         $script:reportRow.currentCPU = $targetVMCurrentHardware.NumberOfCores
         $script:reportRow.currentRAM = $targetVMCurrentHardware.MemoryInMB
-        $script:reportRow.currentPerfScore = $($script:vmScoreData | where{$_.type -eq $targetVM.HardwareProfile.VmSize} | Sort-Object -Property perf | Select-Object -Last 1).perf
+        $script:reportRow.currentPerfScore = $($global:vmScoreData | where{$_.type -eq $targetVM.HardwareProfile.VmSize} | Sort-Object -Property perf | Select-Object -Last 1).perf
         Write-Verbose "$targetVMName currently runs on $($targetVMCurrentHardware.NumberOfCores) vCPU's and $($targetVMCurrentHardware.MemoryInMB)MB memory ($($targetVM.HardwareProfile.VmSize))"
     }catch{
         Throw "$targetVMName failed to get VM metadata from Azure because of $_"
